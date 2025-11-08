@@ -1,0 +1,90 @@
+あなたは熟練のフルスタックエンジニアとして、以下の仕様に基づくアプリケーションを設計・生成してください。
+
+# プロジェクト概要
+複数のGoogleカレンダー（複数アカウント）を監視し、イベントの開始時刻に合わせて「お気に入りキャラのイラスト付き」で特定のスマートフォンにプッシュ通知を送るアプリを作成したい。
+
+# 全体構成
+- バックエンドは GCE（Google Compute Engine）上で常駐し、cron 実行または常時稼働スクリプトとして動作。
+- バックエンドは Google Calendar API から予定を取得し、Firebase Cloud Messaging (FCM) 経由で通知を送信。
+- 通知はユーザーのスマートフォン（PWA またはネイティブアプリ）に届く。
+- 通知内容にはキャライラスト画像＋メッセージ（例：「会議5分前だよ！」）を含める。
+- LINE は使用しない。
+- OAuth2.0 によって複数の Google アカウントを認可し、各アカウントの予定を監視。
+- スマホ通知は Android/iOS 双方対応を目指すが、PWA での実装を優先。
+
+# 技術要件
+- 言語: Node.js（TypeScript推奨）
+- データベース: SQLite または Postgres（初期はSQLiteでも可）
+- フレームワーク: Express.js または Fastify
+- Google Calendar API + Firebase Cloud Messaging (FCM)
+- 認証: Google OAuth2.0 (scope: https://www.googleapis.com/auth/calendar.readonly)
+- デプロイ: GCE VM 上
+- フロントエンド: React / Next.js + PWA（スマホでプッシュ通知受信）
+
+# 機能要件
+1. **Googleアカウント連携**
+   - 複数アカウントを登録可能。
+   - OAuthフローで refresh_token を取得・暗号化保存。
+2. **イベント監視バッチ**
+   - cron（例：毎分）でイベントを取得。
+   - 各アカウントのカレンダーから「今後10分以内に始まるイベント」を検出。
+   - 通知済みイベントはDBで管理し重複送信を防止。
+3. **通知送信**
+   - イベント開始5分前に FCM でプッシュ通知送信。
+   - 通知タイトル例：「会議5分前だよ！」
+   - 通知本文例：「プロジェクトAの打ち合わせが10:00に始まります」
+   - 通知画像: キャライラストURL（例：https://cdn.example.com/chara1.png）
+4. **通知設定**
+   - 通知リードタイム（例: 5分前）・キャラ画像URLなどをユーザー単位で設定。
+5. **PWA側機能**
+   - FCMトークン登録（POST /api/devices）
+   - 通知許可UI、キャラ画像変更UI
+   - Googleアカウント連携UI
+6. **ログ管理**
+   - 送信履歴を `sent_notifications` テーブルに保存。
+   - APIエラー／FCM送信失敗時の再試行ロジックを実装。
+
+# データモデル（例）
+- users(id, email, created_at)
+- google_accounts(id, user_id, google_email, calendar_ids, access_token, refresh_token_encrypted, token_expiry)
+- devices(id, user_id, fcm_registration_token, platform, last_seen)
+- notification_prefs(id, user_id, lead_time_minutes, character_image_url)
+- sent_notifications(id, user_id, account_id, event_id, scheduled_time, sent_at, status)
+
+# セキュリティ要件
+- refresh_tokenはAESなどで暗号化して保存。
+- HTTPS必須。
+- OAuth認可の解除UIを用意。
+- 個人情報やトークンをログに出さない。
+
+# 運用要件
+- GCE上のcronまたはsystemd timerで定期実行。
+- 通知失敗時に再試行（指数バックオフ）。
+- Google APIのRate Limit対応。
+- Cloud KMSまたは環境変数で暗号鍵管理。
+
+# 望む成果物
+- Node.js + TypeScript プロジェクト構造
+- Express サーバ + 定期実行スクリプト
+- Google OAuth 認可ロジック
+- FCM通知送信モジュール
+- SQLite スキーマ定義
+- 簡易フロントエンド（React / Next.js）で
+  - アカウント連携
+  - キャラ画像・通知設定
+  - 通知受信 (PWA対応)
+- README: セットアップ手順・Google API / Firebase設定手順・cron設定例を記載
+
+# 優先度
+1. バックエンド（スケジューラ＋通知処理）
+2. Google OAuth / 複数アカウント対応
+3. FCM 通知送信
+4. 最小限のPWA UI
+
+# 開発時の注意
+- iOS SafariのPWAでWebPushが機能するように Service Worker を適切に設定。
+- Google Calendarの繰り返しイベントにも対応（instanceごとに処理）。
+- タイムゾーンはUTC基準で正規化。
+
+以上を踏まえて、Gemini CLIで自動生成可能な範囲でコードを出力してください。
+最初にディレクトリ構成、主要ファイルの概要を出し、続けて各部分のコードを分割生成してください。

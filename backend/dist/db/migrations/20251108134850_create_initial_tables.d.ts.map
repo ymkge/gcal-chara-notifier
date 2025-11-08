@@ -1,0 +1,1 @@
+{"version":3,"file":"20251108134850_create_initial_tables.d.ts","sourceRoot":"","sources":["../../../src/db/migrations/20251108134850_create_initial_tables.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,IAAI,EAAE,MAAM,MAAM,CAAC;AAEjC,wBAAsB,EAAE,CAAC,IAAI,EAAE,IAAI,GAAG,OAAO,CAAC,IAAI,CAAC,CA+ClD;AAED,wBAAsB,IAAI,CAAC,IAAI,EAAE,IAAI,GAAG,OAAO,CAAC,IAAI,CAAC,CAMpD"}
