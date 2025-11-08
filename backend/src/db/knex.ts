@@ -1,5 +1,5 @@
 import knex from 'knex';
-import config = require('../knexfile');
+import config = require('../../knexfile');
 
 type Environment = 'development' | 'production';
 

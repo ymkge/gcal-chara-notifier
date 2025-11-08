@@ -47,5 +47,6 @@
     "allowJs": true,
     "noImplicitAny": true
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["knexfile.ts", "node_modules"]
 }
