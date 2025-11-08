@@ -1,1 +1,1 @@
-{"version":3,"file":"knex.d.ts","sourceRoot":"","sources":["../../src/db/knex.ts"],"names":[],"mappings":"AAAA,OAAO,IAAI,MAAM,MAAM,CAAC;AAIxB,QAAA,MAAM,EAAE,2BAA4B,CAAC;AAErC,eAAe,EAAE,CAAC"}
+{"version":3,"file":"knex.d.ts","sourceRoot":"","sources":["../../src/db/knex.ts"],"names":[],"mappings":"AAAA,OAAO,IAAI,MAAM,MAAM,CAAC;AAaxB,QAAA,MAAM,EAAE,2BAAiB,CAAC;AAE1B,eAAe,EAAE,CAAC"}

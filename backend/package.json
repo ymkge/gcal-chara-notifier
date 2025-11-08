@@ -7,8 +7,8 @@
     "dev": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "db:migrate": "knex migrate:latest --knexfile knexfile.ts",
-    "db:make-migration": "knex migrate:make --knexfile knexfile.ts -x ts",
+    "db:migrate": "knex migrate:latest --knexfile src/knexfile.ts",
+    "db:make-migration": "knex migrate:make --knexfile src/knexfile.ts -x ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

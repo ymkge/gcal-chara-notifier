@@ -1,10 +1,19 @@
 import express from 'express';
+import dotenv from 'dotenv';
 import db from './db/knex';
+import authRouter from './api/auth';
+
+// Load environment variables
+dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3001;
 
 app.use(express.json());
+
+// API Routers
+app.use('/api/auth', authRouter);
+
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
