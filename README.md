@@ -2,40 +2,38 @@
 
 複数のGoogleカレンダーを監視し、イベントの開始時刻に合わせて「お気に入りキャラのイラスト付き」で特定のスマートフォンにプッシュ通知を送るアプリケーションです。
 
-## 現在の進捗
+## 開発の現状と再開時のアクション (2025-11-08時点)
 
-- **バックエンドの基盤構築完了**
-  - Node.js + TypeScript + Express によるプロジェクト構成
-  - `knex.js` と SQLite を使用したデータベース設定とマイグレーション
-  - `tsc` によるビルド設定と、`nodemon` を使用した開発環境
-  - データベース接続を含むヘルスチェックAPI (`/api/health`)
-- **Google OAuth 2.0 連携機能の実装完了**
-  - `googleapis` を使用した認証ロジック
-  - `refresh_token` をAES-256-GCMで暗号化してDBに保存
-  - Googleアカウント連携を開始し、コールバックを処理するAPIエンドポイント群 (`/api/auth/google`, `/api/auth/google/callback`)
+現在、バックエンドの基本機能とGoogle OAuth連携機能の実装が完了し、`npm run dev` でサーバーを起動できる状態です。
 
-## ディレクトリ構成 (バックエンド)
+### 中断時点の課題
 
-```
-backend/
-├── dist/                 # コンパイル後のJavaScriptファイル
-├── src/
-│   ├── api/              # Expressのルーターとコントローラー
-│   │   └── auth.ts
-│   ├── core/             # 中核ロジック
-│   │   └── googleAuth.ts
-│   ├── db/
-│   │   ├── migrations/   # DBスキーマ定義
-│   │   └── knex.ts
-│   ├── lib/              # 補助的なライブラリ
-│   │   └── crypto.ts
-│   ├── index.ts          # Expressサーバー起動点
-│   └── knexfile.ts       # Knex.js 設定
-├── .env.example          # 環境変数テンプレート
-├── .gitignore
-├── package.json
-└── tsconfig.json
-```
+Googleアカウント連携をテストする際、開発者の環境で `http://localhost:3001/api/auth/google` にアクセスすると、意図しない古いOAuthクライアントの同意画面が表示される問題が発生しています。
+（Googleアカウントからのログアウトでは解決しませんでした。）
+
+これは、ブラウザに保存されているセッションやCookieが原因である可能性が高いです。
+
+### ★ 再開時の最初のアクション
+
+開発を再開する際は、**まず以下の手順でこの問題が解決するかどうかを確認してください。**
+
+1.  お使いのブラウザで**シークレットモード（プライベートウィンドウ）**を開きます。
+2.  シークレットモードのウィンドウで、開発サーバーの認証開始URLにアクセスします。
+    ```
+    http://localhost:3001/api/auth/google
+    ```
+3.  今回`.env`に設定したクライアントIDに対応する、**新しいアプリケーションの同意画面**が表示されることを確認します。
+
+#### 問題が解決した場合
+無事に新しい同意画面が表示されたら、OAuth連携機能のテストは完了です。
+次の `NEXT STEP - 今後の開発計画` に記載されている「**1. イベント監視スケジューラの構築**」から開発を再開します。
+
+#### 問題が解決しない場合
+シークレットモードでも古い画面が表示される場合は、さらに詳しい調査が必要です。その際は、以下の可能性を検討します。
+- `.env` ファイルに設定した `GOOGLE_CLIENT_ID` が正しいかどうかの再確認。
+- バックエンドが生成している認証URL自体をデバッグする。
+
+---
 
 ## セットアップと実行手順
 
@@ -75,15 +73,6 @@ npm run db:migrate
 **開発モード (ホットリロード有効):**
 ```bash
 npm run dev
-```
-
-**本番モード:**
-```bash
-# 1. TypeScriptをJavaScriptにコンパイル
-npm run build
-
-# 2. サーバーを起動
-npm run start
 ```
 
 ### 6. Googleアカウント連携のテスト
@@ -127,3 +116,6 @@ http://localhost:3001/api/auth/google
 - **実装**:
   - `POST /api/devices`: フロントエンドから受け取ったFCM登録トークンをDBに保存する。
   - `GET /api/notification-prefs`, `POST /api/notification-prefs`: 通知リードタイムやキャラクター画像URLを設定・取得する。
+
+---
+*This README was last updated by Gemini on 2025-11-08.*
