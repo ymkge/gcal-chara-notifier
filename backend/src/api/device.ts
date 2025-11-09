@@ -17,8 +17,8 @@ router.post('/devices', async (req, res) => {
   try {
     // 既存のトークンがあれば更新、なければ新規作成
     await db('devices')
-      .insert({ user_id: userId, fcm_token: fcmToken })
-      .onConflict(['user_id', 'fcm_token']) // user_idとfcm_tokenの組み合わせでユニーク
+      .insert({ user_id: userId, fcm_registration_token: fcmToken }) // fcm_token -> fcm_registration_token
+      .onConflict(['fcm_registration_token']) // user_idとfcm_tokenの組み合わせでユニーク -> fcm_registration_tokenでユニーク
       .merge(); // 競合した場合は更新
 
     res.status(200).send('FCM Token saved successfully.');

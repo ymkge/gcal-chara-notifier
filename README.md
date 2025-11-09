@@ -2,36 +2,38 @@
 
 複数のGoogleカレンダーを監視し、イベントの開始時刻に合わせて「お気に入りキャラのイラスト付き」で特定のスマートフォンにプッシュ通知を送るアプリケーションです。
 
-## 開発の現状と再開時のアクション (2025-11-08時点)
+## 開発の現状と再開時のアクション (2025-11-09時点)
 
 現在、バックエンドの基本機能とGoogle OAuth連携機能の実装が完了し、`npm run dev` でサーバーを起動できる状態です。
 
-### 中断時点の課題
+### 本日の対応内容 (2025-11-09)
 
-Googleアカウント連携をテストする際、開発者の環境で `http://localhost:3001/api/auth/google` にアクセスすると、意図しない古いOAuthクライアントの同意画面が表示される問題が発生しています。
-（Googleアカウントからのログアウトでは解決しませんでした。）
+-   **Google OAuth同意画面の課題解決**:
+    -   以前発生していた「意図しない古いOAuthクライアントの同意画面が表示される問題」は、Google Cloud Platformのブランディング設定でアプリ名を修正することで解決しました。
+-   **イベント監視スケジューラの構築 (一部完了)**:
+    -   `node-cron` をインストールし、`src/core/scheduler.ts` を作成しました。
+    -   スケジューラは毎日6時から22時までの間、毎時20分と50分に実行されるように設定しました。これにより、会議の10分前にイベントを検知できる可能性が高まります。
+    -   `src/index.ts` にスケジューラ起動ロジックを組み込みました。
+-   **FCM通知送信モジュールの実装 (準備段階)**:
+    -   `firebase-admin` をインストールし、`backend/.env.example` にFirebase認証情報用の環境変数 (`FIREBASE_PROJECT_ID`, `FIREBASE_PRIVATE_KEY`, `FIREBASE_CLIENT_EMAIL`) を追加しました。
+    -   `src/core/notifier.ts` を作成し、Firebase Admin SDKの初期化コードとFCM通知送信関数のスケルトンを実装しました。
+-   **APIの拡充 (FCMトークン保存API)**:
+    -   `POST /api/devices` エンドポイントを処理する `src/api/device.ts` を作成し、`src/index.ts` に組み込みました。
+    -   `src/api/device.ts` のロジックを、既存の `20251108134850_create_initial_tables.ts` に含まれる `devices` テーブルのスキーマに合わせて修正しました。
 
-これは、ブラウザに保存されているセッションやCookieが原因である可能性が高いです。
+### 現在の課題点
 
-### ★ 再開時の最初のアクション
+-   **Knex.js マイグレーションエラー**:
+    -   `npm run db:migrate` を実行すると、`SQLITE_ERROR: table devices already exists` というエラーが発生し、マイグレーションが完了しません。
+    -   `backend/src/db/dev.sqlite3` ファイルの手動削除、`backend/node_modules` の削除と `npm install` の再実行を試みましたが、解決に至っていません。
+    -   この問題は、`knex` の動作が期待通りではないか、環境設定に何らかの問題がある可能性が高いです。
+    -   この課題が解決しない限り、`devices` テーブルが正しく作成されず、FCMトークンを保存するAPI (`POST /api/devices`) や、FCM通知モジュールが機能しません。
 
-開発を再開する際は、**まず以下の手順でこの問題が解決するかどうかを確認してください。**
+### ★ 次回開発再開時のアクション
 
-1.  お使いのブラウザで**シークレットモード（プライベートウィンドウ）**を開きます。
-2.  シークレットモードのウィンドウで、開発サーバーの認証開始URLにアクセスします。
-    ```
-    http://localhost:3001/api/auth/google
-    ```
-3.  今回`.env`に設定したクライアントIDに対応する、**新しいアプリケーションの同意画面**が表示されることを確認します。
-
-#### 問題が解決した場合
-無事に新しい同意画面が表示されたら、OAuth連携機能のテストは完了です。
-次の `NEXT STEP - 今後の開発計画` に記載されている「**1. イベント監視スケジューラの構築**」から開発を再開します。
-
-#### 問題が解決しない場合
-シークレットモードでも古い画面が表示される場合は、さらに詳しい調査が必要です。その際は、以下の可能性を検討します。
-- `.env` ファイルに設定した `GOOGLE_CLIENT_ID` が正しいかどうかの再確認。
-- バックエンドが生成している認証URL自体をデバッグする。
+-   **最優先**: 上記の「Knex.js マイグレーションエラー」の解決。
+    -   `knex` の公式ドキュメントやコミュニティでの情報収集、またはデータベース環境の見直し（例: SQLite以外のDBの検討）が必要となる可能性があります。
+-   マイグレーション問題解決後、`README.md` の「NEXT STEP - 今後の開発計画」の「2. FCM通知送信モジュールの実装」を続行。
 
 ---
 
@@ -56,6 +58,9 @@ cp .env.example .env
   ```bash
   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
   ```
+- `FIREBASE_PROJECT_ID`: FirebaseプロジェクトID
+- `FIREBASE_PRIVATE_KEY`: Firebaseサービスアカウントの秘密鍵 (改行コードは `\n` にエスケープ)
+- `FIREBASE_CLIENT_EMAIL`: Firebaseサービスアカウントのクライアントメール
 
 ### 3. 依存関係のインストール
 ```bash
@@ -64,6 +69,7 @@ npm install
 
 ### 4. データベースのマイグレーション
 SQLiteデータベースファイルとテーブルを作成します。
+**注意: 現在、マイグレーションに問題が発生しています。上記「現在の課題点」を参照してください。**
 ```bash
 npm run db:migrate
 ```
@@ -118,4 +124,4 @@ http://localhost:3001/api/auth/google
   - `GET /api/notification-prefs`, `POST /api/notification-prefs`: 通知リードタイムやキャラクター画像URLを設定・取得する。
 
 ---
-*This README was last updated by Gemini on 2025-11-08.*
+*This README was last updated by Gemini on 2025-11-09.*
