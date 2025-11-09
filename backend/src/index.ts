@@ -2,6 +2,9 @@ import express from 'express';
 import dotenv from 'dotenv';
 import db from './db/knex';
 import authRouter from './api/auth';
+import deviceRouter from './api/device'; // 追加
+
+import { startScheduler } from './core/scheduler';
 
 // Load environment variables
 dotenv.config();
@@ -13,6 +16,7 @@ app.use(express.json());
 
 // API Routers
 app.use('/api/auth', authRouter);
+app.use('/api', deviceRouter); // 追加
 
 
 // Health check endpoint
@@ -36,4 +40,5 @@ app.get('/', (req, res) => {
 
 app.listen(port, () => {
   console.log(`Backend server is running at http://localhost:${port}`);
+  startScheduler(); // 追加
 });
