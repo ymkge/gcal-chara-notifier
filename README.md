@@ -21,18 +21,48 @@
     -   `POST /api/devices` エンドポイントを処理する `src/api/device.ts` を作成し、`src/index.ts` に組み込みました。
     -   `src/api/device.ts` のロジックを、既存の `20251108134850_create_initial_tables.ts` に含まれる `devices` テーブルのスキーマに合わせて修正しました。
 
-### 現在の課題点
+### 現在の課題点と解決策案
 
 -   **Knex.js マイグレーションエラー**:
-    -   `npm run db:migrate` を実行すると、`SQLITE_ERROR: table devices already exists` というエラーが発生し、マイグレーションが完了しません。
-    -   `backend/src/db/dev.sqlite3` ファイルの手動削除、`backend/node_modules` の削除と `npm install` の再実行を試みましたが、解決に至っていません。
-    -   この問題は、`knex` の動作が期待通りではないか、環境設定に何らかの問題がある可能性が高いです。
-    -   この課題が解決しない限り、`devices` テーブルが正しく作成されず、FCMトークンを保存するAPI (`POST /api/devices`) や、FCM通知モジュールが機能しません。
+    -   **事象**: `npm run db:migrate` を実行すると、`SQLITE_ERROR: table "devices" already exists` というエラーが発生し、マイグレーションが完了しません。
+    -   **原因**: 2つのマイグレーションファイル (`20251108134850_create_initial_tables.ts` と `20251109095042_create_devices_table.ts`) で `devices` テーブルの作成が重複していることが原因です。一度目のマイグレーションで `devices` テーブルが作成された後、二度目のマイグレーションでも同じテーブルを作成しようとしてエラーになっています。
+
+#### 解決策案
+
+以下に解決策の案を挙げます。開発の初期段階であるため、**案1が最も推奨されます。**
+
+-   **案1: DBリセットによるクリーンな再構築 (推奨)**
+    1.  **データベースファイルを削除**:
+        ```bash
+        rm backend/src/db/dev.sqlite3
+        ```
+    2.  **マイグレーションファイルを修正**:
+        -   古い方のマイグレーションファイル `backend/db/migrations/20251108134850_create_initial_tables.ts` を開き、`devices` テーブルを作成している `knex.schema.createTable('devices', ...)` のブロックを完全に削除します。
+        -   新しい方の `backend/db/migrations/20251109095042_create_devices_table.ts` に `devices` テーブルの正しいスキーマ定義が残っていることを確認します。
+    3.  **マイグレーションを再実行**:
+        ```bash
+        npm run db:migrate
+        ```
+        これにより、クリーンなデータベースに正しい順序でマイグレーションが適用されます。
+
+-   **案2: マイグレーションファイル内でテーブル存在チェックを追加**
+    -   `backend/db/migrations/20251109095042_create_devices_table.ts` の `up` 関数を修正し、テーブルが存在しない場合のみ作成するようにします。
+        ```typescript
+        // 修正例
+        export async function up(knex: Knex): Promise<void> {
+          const hasTable = await knex.schema.hasTable('devices');
+          if (!hasTable) {
+            return knex.schema.createTable('devices', function (table) {
+              // ... table definition
+            });
+          }
+        }
+        ```
+    -   この方法はエラーを回避できますが、マイグレーションの重複という根本原因は残ります。
 
 ### ★ 次回開発再開時のアクション
 
--   **最優先**: 上記の「Knex.js マイグレーションエラー」の解決。
-    -   `knex` の公式ドキュメントやコミュニティでの情報収集、またはデータベース環境の見直し（例: SQLite以外のDBの検討）が必要となる可能性があります。
+-   **最優先**: 上記「解決策案」の **案1** を実施して、Knex.jsのマイグレーションエラーを解決する。
 -   マイグレーション問題解決後、`README.md` の「NEXT STEP - 今後の開発計画」の「2. FCM通知送信モジュールの実装」を続行。
 
 ---
