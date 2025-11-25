@@ -19,15 +19,6 @@ export async function up(knex: Knex): Promise<void> {
     table.unique(['user_id', 'google_email']);
   });
 
-  await knex.schema.createTable('devices', (table) => {
-    table.increments('id').primary();
-    table.integer('user_id').unsigned().references('id').inTable('users').onDelete('CASCADE');
-    table.text('fcm_registration_token').notNullable().unique();
-    table.string('platform'); // 'android', 'ios', 'web'
-    table.timestamp('last_seen').defaultTo(knex.fn.now());
-    table.timestamps(true, true);
-  });
-
   await knex.schema.createTable('notification_prefs', (table) => {
     table.increments('id').primary();
     table.integer('user_id').unsigned().references('id').inTable('users').onDelete('CASCADE').unique();
@@ -52,7 +43,6 @@ export async function up(knex: Knex): Promise<void> {
 export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('sent_notifications');
   await knex.schema.dropTableIfExists('notification_prefs');
-  await knex.schema.dropTableIfExists('devices');
   await knex.schema.dropTableIfExists('google_accounts');
   await knex.schema.dropTableIfExists('users');
 }
