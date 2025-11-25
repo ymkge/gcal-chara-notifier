@@ -23,10 +23,21 @@ if (!admin.apps.length) {
 
 
 /**
+ * 通知の履歴記録に必要なメタデータを定義するインターフェース
+ */
+interface NotificationMetadata {
+  userId: number;
+  accountId: number;
+  eventId: string;
+  scheduledTime: Date;
+}
+
+/**
  * FCMプッシュ通知を送信する関数
  * @param fcmToken 送信先のデバイスのFCM登録トークン
  * @param title 通知のタイトル
  * @param body 通知の本文
+ * @param metadata 履歴記録用のメタデータ
  * @param imageUrl キャラクター画像のURL (オプション)
  * @param data 追加データ (オプション)
  */
@@ -34,6 +45,7 @@ export const sendFCMNotification = async (
   fcmToken: string,
   title: string,
   body: string,
+  metadata: NotificationMetadata,
   imageUrl?: string,
   data?: { [key: string]: string }
 ) => {
@@ -45,7 +57,7 @@ export const sendFCMNotification = async (
     },
     data: {
       ...data,
-      // TODO: 通知IDやイベントIDなど、必要なデータをここに追加
+      eventId: metadata.eventId,
     },
     token: fcmToken,
   };
@@ -54,31 +66,29 @@ export const sendFCMNotification = async (
     const response = await admin.messaging().send(message);
     console.log('Successfully sent message:', response);
 
-    // TODO: 送信履歴をsent_notificationsテーブルに記録する
-    // await db('sent_notifications').insert({
-    //   user_id: userId, // 適切なユーザーID
-    //   fcm_token: fcmToken,
-    //   title: title,
-    //   body: body,
-    //   sent_at: db.fn.now(),
-    //   status: 'success',
-    //   response: JSON.stringify(response),
-    // });
+    // 送信履歴をsent_notificationsテーブルに記録する
+    await db('sent_notifications').insert({
+      user_id: metadata.userId,
+      account_id: metadata.accountId,
+      event_id: metadata.eventId,
+      scheduled_time: metadata.scheduledTime,
+      status: 'sent',
+      response: JSON.stringify(response),
+    });
 
     return response;
   } catch (error) {
     console.error('Error sending message:', error);
 
-    // TODO: エラー履歴をsent_notificationsテーブルに記録する
-    // await db('sent_notifications').insert({
-    //   user_id: userId, // 適切なユーザーID
-    //   fcm_token: fcmToken,
-    //   title: title,
-    //   body: body,
-    //   sent_at: db.fn.now(),
-    //   status: 'error',
-    //   error_message: error.message,
-    // });
+    // エラー履歴をsent_notificationsテーブルに記録する
+    await db('sent_notifications').insert({
+      user_id: metadata.userId,
+      account_id: metadata.accountId,
+      event_id: metadata.eventId,
+      scheduled_time: metadata.scheduledTime,
+      status: 'failed',
+      error_message: error instanceof Error ? error.message : String(error),
+    });
 
     throw error;
   }
