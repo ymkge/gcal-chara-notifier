@@ -2,68 +2,37 @@
 
 複数のGoogleカレンダーを監視し、イベントの開始時刻に合わせて「お気に入りキャラのイラスト付き」で特定のスマートフォンにプッシュ通知を送るアプリケーションです。
 
-## 開発の現状と再開時のアクション (2025-11-09時点)
+## 開発の現状 (2025-11-25時点)
 
-現在、バックエンドの基本機能とGoogle OAuth連携機能の実装が完了し、`npm run dev` でサーバーを起動できる状態です。
+バックエンドの主要機能である、カレンダー監視〜プッシュ通知までの一連のフローが実装完了しました。
+`npm run dev` でサーバーを起動すると、スケジューラが自動で動作し、データベースの情報に基づいてプッシュ通知が送信される状態です。
 
-### 本日の対応内容 (2025-11-09)
+### 本日の対応内容 (2025-11-25)
 
--   **Google OAuth同意画面の課題解決**:
-    -   以前発生していた「意図しない古いOAuthクライアントの同意画面が表示される問題」は、Google Cloud Platformのブランディング設定でアプリ名を修正することで解決しました。
--   **イベント監視スケジューラの構築 (一部完了)**:
-    -   `node-cron` をインストールし、`src/core/scheduler.ts` を作成しました。
-    -   スケジューラは毎日6時から22時までの間、毎時20分と50分に実行されるように設定しました。これにより、会議の10分前にイベントを検知できる可能性が高まります。
-    -   `src/index.ts` にスケジューラ起動ロジックを組み込みました。
--   **FCM通知送信モジュールの実装 (準備段階)**:
-    -   `firebase-admin` をインストールし、`backend/.env.example` にFirebase認証情報用の環境変数 (`FIREBASE_PROJECT_ID`, `FIREBASE_PRIVATE_KEY`, `FIREBASE_CLIENT_EMAIL`) を追加しました。
-    -   `src/core/notifier.ts` を作成し、Firebase Admin SDKの初期化コードとFCM通知送信関数のスケルトンを実装しました。
--   **APIの拡充 (FCMトークン保存API)**:
-    -   `POST /api/devices` エンドポイントを処理する `src/api/device.ts` を作成し、`src/index.ts` に組み込みました。
-    -   `src/api/device.ts` のロジックを、既存の `20251108134850_create_initial_tables.ts` に含まれる `devices` テーブルのスキーマに合わせて修正しました。
-
-### 現在の課題点と解決策案
-
--   **Knex.js マイグレーションエラー**:
-    -   **事象**: `npm run db:migrate` を実行すると、`SQLITE_ERROR: table "devices" already exists` というエラーが発生し、マイグレーションが完了しません。
-    -   **原因**: 2つのマイグレーションファイル (`20251108134850_create_initial_tables.ts` と `20251109095042_create_devices_table.ts`) で `devices` テーブルの作成が重複していることが原因です。一度目のマイグレーションで `devices` テーブルが作成された後、二度目のマイグレーションでも同じテーブルを作成しようとしてエラーになっています。
-
-#### 解決策案
-
-以下に解決策の案を挙げます。開発の初期段階であるため、**案1が最も推奨されます。**
-
--   **案1: DBリセットによるクリーンな再構築 (推奨)**
-    1.  **データベースファイルを削除**:
-        ```bash
-        rm backend/src/db/dev.sqlite3
-        ```
-    2.  **マイグレーションファイルを修正**:
-        -   古い方のマイグレーションファイル `backend/db/migrations/20251108134850_create_initial_tables.ts` を開き、`devices` テーブルを作成している `knex.schema.createTable('devices', ...)` のブロックを完全に削除します。
-        -   新しい方の `backend/db/migrations/20251109095042_create_devices_table.ts` に `devices` テーブルの正しいスキーマ定義が残っていることを確認します。
-    3.  **マイグレーションを再実行**:
-        ```bash
-        npm run db:migrate
-        ```
-        これにより、クリーンなデータベースに正しい順序でマイグレーションが適用されます。
-
--   **案2: マイグレーションファイル内でテーブル存在チェックを追加**
-    -   `backend/db/migrations/20251109095042_create_devices_table.ts` の `up` 関数を修正し、テーブルが存在しない場合のみ作成するようにします。
-        ```typescript
-        // 修正例
-        export async function up(knex: Knex): Promise<void> {
-          const hasTable = await knex.schema.hasTable('devices');
-          if (!hasTable) {
-            return knex.schema.createTable('devices', function (table) {
-              // ... table definition
-            });
-          }
-        }
-        ```
-    -   この方法はエラーを回避できますが、マイグレーションの重複という根本原因は残ります。
+-   **DBマイグレーションエラーの解決**:
+    -   以前からの課題であった、マイグレーション実行時に `devices` テーブルが重複して作成されるエラーを解決しました。
+    -   不要なマイグレーションコードを削除し、データベースをクリーンな状態から再構築しました。
+-   **FCM通知送信モジュールの完成**:
+    -   `src/core/notifier.ts` を本格的に実装しました。
+    -   通知の送信後、その結果（成功・失敗）を `sent_notifications` テーブルに記録するロジックを追加しました。
+    -   上記のために、`sent_notifications` テーブルに `response` と `error_message` カラムを追加するマイグレーションを行いました。
+-   **イベント監視スケジューラの完成**:
+    -   `src/core/scheduler.ts` に、カレンダーを監視して通知をトリガーする一連の処理を実装しました。
+    -   **主なロジック**:
+        -   cronジョブで定期的（毎時20分・50分）に処理を実行。
+        -   DBからGoogleアカウント、ユーザーの通知設定、デバイス情報を取得。
+        -   ユーザーが設定したリードタイム（例: 10分前）に合わせて、通知すべきタイミングかを判定。
+        -   同じイベントへの重複通知を防止するチェック機構を実装。
+        -   条件を満たした場合、`notifier` モジュールを呼び出してプッシュ通知を実行。
 
 ### ★ 次回開発再開時のアクション
 
--   **最優先**: 上記「解決策案」の **案1** を実施して、Knex.jsのマイグレーションエラーを解決する。
--   マイグレーション問題解決後、`README.md` の「NEXT STEP - 今後の開発計画」の「2. FCM通知送信モジュールの実装」を続行。
+バックエンドの基本機能が整ったため、次のいずれかのアクションに進むことができます。
+
+-   **フロントエンドの構築 (推奨)**:
+    -   `README.md` の「NEXT STEP - 今後の開発計画」に記載の「**3. フロントエンド (PWA) の構築**」に着手します。
+-   **バックエンドの改善**:
+    -   コード内に `TODO` として残っている改善項目（複数カレンダー対応、Google認証トークン失効時のエラーハンドリングなど）を実装します。
 
 ---
 
@@ -99,7 +68,6 @@ npm install
 
 ### 4. データベースのマイグレーション
 SQLiteデータベースファイルとテーブルを作成します。
-**注意: 現在、マイグレーションに問題が発生しています。上記「現在の課題点」を参照してください。**
 ```bash
 npm run db:migrate
 ```
@@ -122,15 +90,15 @@ http://localhost:3001/api/auth/google
 
 ## NEXT STEP - 今後の開発計画
 
-### 1. イベント監視スケジューラの構築
+### 1. イベント監視スケジューラの構築 (完了)
 - **目的**: 定期的にGoogle Calendarをチェックし、通知対象のイベントを見つける。
 - **実装**:
-  - `node-cron` を利用して、毎分実行されるタスクを作成 (`src/core/scheduler.ts`)。
+  - `node-cron` を利用して、毎時20分・50分に実行されるタスクを作成 (`src/core/scheduler.ts`)。
   - DBからGoogleアカウント情報を取得し、復号した`refresh_token`で認証済みクライアントを作成。
   - Google Calendar API (`calendar.events.list`) を使用して、直近のイベントを取得。
-  - 通知すべきイベントを特定し、通知ジョブのキューに追加する。
+  - ユーザー設定に基づき、通知すべきイベントを特定して通知を実行する。
 
-### 2. FCM通知送信モジュールの実装
+### 2. FCM通知送信モジュールの実装 (完了)
 - **目的**: スケジューラが見つけたイベント情報を元に、スマートフォンへプッシュ通知を送信する。
 - **実装**:
   - `firebase-admin` SDKをセットアップ。
@@ -154,4 +122,4 @@ http://localhost:3001/api/auth/google
   - `GET /api/notification-prefs`, `POST /api/notification-prefs`: 通知リードタイムやキャラクター画像URLを設定・取得する。
 
 ---
-*This README was last updated by Gemini on 2025-11-09.*
+*This README was last updated by Gemini on 2025-11-25.*
