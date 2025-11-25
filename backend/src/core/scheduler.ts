@@ -3,18 +3,19 @@ import db from '../db/knex';
 import { decrypt } from '../lib/crypto';
 import { getAuthenticatedClient } from './googleAuth';
 import { google } from 'googleapis';
+import { sendFCMNotification } from './notifier';
 
 /**
  * スケジューラを開始する関数
  */
 export const startScheduler = () => {
-  // 毎分実行されるタスクをスケジュール
+  // 毎日6時から22時までの間、毎時20分と50分に実行
   cron.schedule('20,50 6-22 * * *', async () => {
-    console.log('Running scheduled task: Checking Google Calendar events...');
+    console.log(`[${new Date().toISOString()}] Running scheduled task: Checking Google Calendar events...`);
     await checkGoogleCalendarEvents();
   });
 
-  console.log('Scheduler started. Checking for events every minute.');
+  console.log('Scheduler started. Waiting for scheduled tasks.');
 };
 
 /**
@@ -22,55 +23,98 @@ export const startScheduler = () => {
  */
 const checkGoogleCalendarEvents = async () => {
   try {
-    // 1. データベースからGoogleアカウント情報を取得
     const googleAccounts = await db('google_accounts').select('*');
 
     for (const account of googleAccounts) {
       try {
-        const userId = account.user_id;
-        const googleEmail = account.google_email;
-        const encryptedRefreshToken = account.refresh_token_encrypted;
+        const { user_id: userId, google_email: googleEmail, refresh_token_encrypted: encryptedRefreshToken, id: accountId } = account;
 
         if (!encryptedRefreshToken) {
-          console.warn(`User ${userId} (${googleEmail}) has no refresh token. Skipping.`);
+          console.warn(`Skipping ${googleEmail}: No refresh token found.`);
           continue;
         }
 
-        // 2. refresh_tokenを復号し、認証済みクライアントを作成
         const refreshToken = decrypt(encryptedRefreshToken);
         const authClient = getAuthenticatedClient(refreshToken);
-
-        // 3. Google Calendar APIを使用してイベントを取得
         const calendar = google.calendar({ version: 'v3', auth: authClient });
 
-        // 現在時刻からN分後までのイベントを取得する例
         const now = new Date();
         const timeMin = now.toISOString();
-        const timeMax = new Date(now.getTime() + 10 * 60 * 1000).toISOString(); // 今から10分後まで
+        // 次のcron実行は30分後なので、余裕をもって35分後までのイベントを取得
+        const timeMax = new Date(now.getTime() + 35 * 60 * 1000).toISOString();
 
+        // TODO: 将来的には 'primary' だけでなく、DBに保存されたカレンダーIDをすべてチェックする
         const response = await calendar.events.list({
-          calendarId: 'primary', // 'primary'はユーザーのメインカレンダー
-          timeMin: timeMin,
-          timeMax: timeMax,
+          calendarId: 'primary',
+          timeMin,
+          timeMax,
           singleEvents: true,
           orderBy: 'startTime',
         });
 
         const events = response.data.items;
-
-        if (events && events.length > 0) {
-          console.log(`Found ${events.length} upcoming events for ${googleEmail}:`);
-          for (const event of events) {
-            console.log(`- ${event.summary} (${event.start?.dateTime || event.start?.date})`);
-            // TODO: ここで通知すべきイベントを特定し、通知ジョブのキューに追加するロジックを実装
-          }
-        } else {
-          console.log(`No upcoming events found for ${googleEmail} in the next 10 minutes.`);
+        if (!events || events.length === 0) {
+          continue;
         }
 
+        // ユーザーの通知設定とデバイス情報を取得
+        const userPrefs = await db('notification_prefs').where('user_id', userId).first();
+        const devices = await db('devices').where('user_id', userId);
+        if (!devices || devices.length === 0) {
+          console.warn(`Skipping ${googleEmail}: No registered devices found for user ${userId}.`);
+          continue;
+        }
+
+        for (const event of events) {
+          const eventId = event.id;
+          const eventStartTimeStr = event.start?.dateTime;
+          if (!eventId || !eventStartTimeStr) continue;
+
+          // 1. 重複通知チェック
+          const existingNotification = await db('sent_notifications')
+            .where({ account_id: accountId, event_id: eventId })
+            .first();
+          if (existingNotification) {
+            continue; // 既にこのイベントの通知レコードが存在する
+          }
+
+          // 2. 通知タイミングの判定
+          const eventStartTime = new Date(eventStartTimeStr);
+          const leadTime = userPrefs?.lead_time_minutes || 10; // デフォルト10分
+          const notificationTime = new Date(eventStartTime.getTime() - leadTime * 60 * 1000);
+
+          // cronの実行タイミングのズレを吸収するため、2分間のウィンドウを設ける
+          const notificationWindowStart = new Date(notificationTime.getTime() - 1 * 60 * 1000);
+          const notificationWindowEnd = new Date(notificationTime.getTime() + 1 * 60 * 1000);
+
+          if (now >= notificationWindowStart && now <= notificationWindowEnd) {
+            // 3. 通知の実行
+            console.log(`[${now.toISOString()}] Sending notification for event: "${event.summary}" to ${googleEmail}`);
+
+            const title = event.summary || 'もうすぐ予定の時間です';
+            const body = `${leadTime}分後に開始します`;
+            const imageUrl = userPrefs?.character_image_url;
+
+            // 全てのデバイスに通知を送信
+            for (const device of devices) {
+              await sendFCMNotification(
+                device.fcm_token,
+                title,
+                body,
+                {
+                  userId: userId,
+                  accountId: accountId,
+                  eventId: eventId,
+                  scheduledTime: eventStartTime,
+                },
+                imageUrl
+              );
+            }
+          }
+        }
       } catch (accountError) {
         console.error(`Error processing Google account ${account.google_email}:`, accountError);
-        // TODO: トークン失効などのエラーハンドリング
+        // TODO: トークン失効（invalid_grantなど）を検知した場合、DBのトークンを無効化する処理を追加
       }
     }
   } catch (dbError) {
