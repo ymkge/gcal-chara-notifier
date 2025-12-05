@@ -115,10 +115,11 @@ http://localhost:3001/api/auth/google
   - Firebase SDKを導入し、FCM登録トークンを生成してバックエンドに送信するAPIクライアントを実装。
   - Service Worker (`firebase-messaging-sw.js`) を設定し、バックグラウンドでのプッシュ通知受信を可能にする。
 
-### 4. APIの拡充
+### 4. APIの拡充 (一部実装済み)
 - **目的**: フロントエンドや設定に必要なAPIを追加する。
-- **実装**:
+- **実装済みのAPI**:
   - `POST /api/devices`: フロントエンドから受け取ったFCM登録トークンをDBに保存する。
+- **今後の実装予定**:
   - `GET /api/notification-prefs`, `POST /api/notification-prefs`: 通知リードタイムやキャラクター画像URLを設定・取得する。
 
 ---
